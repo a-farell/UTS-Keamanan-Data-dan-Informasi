@@ -12,65 +12,76 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    if (($_SESSION['lock_until'] ?? 0) > time()) {
-        $error = 'Terlalu banyak percobaan gagal. Coba lagi dalam ' . ($_SESSION['lock_until'] - time()) . ' detik.';
-    } else {
-        $sym  = trim($_POST['sym_key'] ?? '');
-        $priv = trim($_POST['priv_key'] ?? '');
-        $row  = false;
-        try {
-            $row = db()->query('SELECT * FROM admin_keys ORDER BY id DESC LIMIT 1')->fetch();
-        } catch (Throwable $t) {
-            $error = 'Database belum siap. Pastikan database.sql sudah di-import dan config.php benar.';
-        }
+    $sym  = trim($_POST['sym_key'] ?? '');
+    $priv = trim($_POST['priv_key'] ?? '');
+    $row  = false;
+    try {
+        $row = db()->query('SELECT * FROM admin_keys ORDER BY id DESC LIMIT 1')->fetch();
+    } catch (Throwable $t) {
+        $error = 'Database belum siap. Pastikan database.sql sudah di-import dan config.php benar.';
+    }
 
-        if ($error === '') {
-            if (!$row) {
-                $error = 'Kunci belum dibuat. Buka setup.php terlebih dahulu.';
-            } elseif ($sym === '' || $priv === '') {
-                $error = 'Kunci simetris dan kunci privat asimetris wajib diisi.';
-            } elseif (password_verify($sym, $row['sym_hash']) && verify_private_key($priv, $row['public_key'])) {
-                session_regenerate_id(true);
-                $_SESSION['sym_key']  = $sym;
-                $_SESSION['priv_key'] = $priv;
-                $_SESSION['fail'] = 0;
-                unset($_SESSION['lock_until']);
-                header('Location: admin.php');
-                exit;
-            } else {
-                $_SESSION['fail'] = ($_SESSION['fail'] ?? 0) + 1;
-                if ($_SESSION['fail'] >= 5) {
-                    $_SESSION['lock_until'] = time() + 60;
-                    $_SESSION['fail'] = 0;
-                }
-                $error = 'Kunci tidak valid. Akses ditolak.';
-            }
+    if ($error === '') {
+        if (!$row) {
+            $error = 'Kunci belum dibuat. Buka setup.php terlebih dahulu.';
+        } elseif ($sym === '' || $priv === '') {
+            $error = 'Kunci simetris dan kunci privat asimetris wajib diisi.';
+        } else {
+            $keysValid = password_verify($sym, $row['sym_hash'])
+                && verify_private_key($priv, $row['public_key']);
+            session_regenerate_id(true);
+            $_SESSION['sym_key']  = $sym;
+            $_SESSION['priv_key'] = $priv;
+            $_SESSION['keys_valid'] = $keysValid;
+            header('Location: admin.php');
+            exit;
         }
     }
 }
 
 layout_head('Sistem Informasi Data Terenkripsi');
 ?>
-<div class="center">
-  <div class="card narrow">
-    <h1>🔐 SecureInfo</h1>
-    <p class="muted">Sistem Informasi Data Terenkripsi. Akses halaman admin menggunakan
-       <b>kunci simetris</b> (AES-256) dan <b>kunci privat asimetris</b> (RSA-2048).</p>
+<main class="login-page">
+  <div class="login-shell">
+    <section class="login-intro">
+      <a class="brand" href="index.php"><span class="brand-mark">S</span> SecureInfo</a>
+      <div class="eyebrow"><span class="status-dot"></span> PRIVATE DATA VAULT</div>
+      <h1>Data penting.<br><span>Perlindungan berlapis.</span></h1>
+      <p class="intro-copy">Simpan dan kelola informasi dalam ruang digital yang dirancang untuk menjaga privasi.</p>
+      <div class="feature-list">
+        <div class="feature-item"><span class="feature-icon">01</span><span><b>Enkripsi AES-256</b><small>Data terlindungi saat disimpan</small></span></div>
+        <div class="feature-item"><span class="feature-icon">02</span><span><b>Verifikasi RSA-2048</b><small>Akses menggunakan pasangan kunci</small></span></div>
+      </div>
+      <div class="intro-foot"><span class="intro-line"></span> SECURE INFORMATION SYSTEM</div>
+    </section>
 
-    <?php if ($error): ?><div class="alert err"><?= e($error) ?></div><?php endif; ?>
+    <section class="card login-card">
+      <div class="card-heading">
+        <div class="card-icon">↗</div>
+        <div class="eyebrow">SELAMAT DATANG KEMBALI</div>
+        <h2>Masuk ke akun</h2>
+        <p class="muted">Gunakan kunci enkripsi Anda untuk melanjutkan.</p>
+      </div>
 
-    <form method="post" autocomplete="off">
-      <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+      <?php if ($error): ?><div class="alert err"><?= e($error) ?></div><?php endif; ?>
 
-      <label for="sym_key">Kunci Simetris (AES-256, 64 karakter hex)</label>
-      <input type="password" id="sym_key" name="sym_key" placeholder="Tempel kunci simetris di sini" required>
+      <form method="post" autocomplete="off">
+        <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
 
-      <label for="priv_key">Kunci Privat Asimetris (RSA, format PEM)</label>
-      <textarea id="priv_key" name="priv_key" placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----" required></textarea>
+        <label for="sym_key">Kunci simetris <span>AES-256</span></label>
+        <input type="password" id="sym_key" name="sym_key" placeholder="Tempel kunci simetris" autocomplete="off" required>
 
-      <button type="submit">Masuk ke Halaman Admin</button>
-    </form>
-    <p class="muted" style="margin-top:18px">Belum punya kunci? <a href="setup.php">Generate kunci (setup awal)</a></p>
+        <label for="priv_key">Kunci privat <span>RSA-2048 · PEM</span></label>
+        <textarea id="priv_key" name="priv_key" placeholder="-----BEGIN PRIVATE KEY-----&#10;..." autocomplete="off" spellcheck="false" required></textarea>
+
+        <button type="submit">Masuk ke dashboard <span aria-hidden="true">→</span></button>
+      </form>
+      <div class="login-footer">
+        <span>Belum memiliki kunci?</span>
+        <a href="setup.php">Setup kunci awal <span aria-hidden="true">↗</span></a>
+      </div>
+      <div class="secure-caption"><span aria-hidden="true">◆</span> Koneksi sesi dilindungi token keamanan</div>
+    </section>
   </div>
-</div>
+</main>
 <?php layout_foot();

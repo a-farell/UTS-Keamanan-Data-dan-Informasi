@@ -5,7 +5,7 @@ declare(strict_types=1);
 const DB_HOST = 'localhost';
 const DB_NAME = 'uts_keamanan';
 const DB_USER = 'root';
-const DB_PASS = '';   // XAMPP default: kosong
+const DB_PASS = '';   
 
 if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params(['httponly' => true, 'samesite' => 'Strict']);
